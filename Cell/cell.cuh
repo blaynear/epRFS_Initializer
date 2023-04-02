@@ -28,7 +28,7 @@ class Cell{
 
   //unsigned int *numeralProp; //Proportion array for species
   //unsigned int *numeralFit;
-  //unsigned int prop;
+  unsigned int prop;
   //unsigned int fitness;
 
   template<class t>
@@ -39,7 +39,7 @@ public:
   __host__ __device__ Cell(unsigned int);
   __host__ __device__ unsigned int getSize();
   __host__ __device__ void setNumeral(unsigned int, unsigned int);
-  __host__ __device__ unsigned int getNumeral();
+  __host__ __device__ unsigned int getProp();
   //__host__ __device__ unsigned int getNumeralProp();
   __host__ __device__ void free_cell();
   //__host__ __device__ unsigned int getNumeralFit();

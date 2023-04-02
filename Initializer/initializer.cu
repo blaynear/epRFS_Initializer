@@ -3,6 +3,33 @@
 using namespace std;
 const int baseThreadCount = 64;
 
+/***************************************************************************/
+/*   											      Global Functions													 */
+/***************************************************************************/
+__host__ __device__ unsigned int getRow(int index, int dim){
+	return index % dim;
+}
+
+__host__ __device__ unsigned int getCol(int index, int dim){
+	return (index / dim) % dim;
+}
+
+__host__ __device__ unsigned int getNum(int index, int dim){
+	return index / (dim*dim);
+}
+
+__host__ __device__ unsigned int get2DIndex(int x, int y, int dim) {
+	return x + dim*y;
+}
+
+__host__ __device__ unsigned int getSquare(int index, int dim){
+	return get2DIndex(getRow(index, dim) / sqrtf((double)dim), getCol(index, dim) / sqrtf((double)dim), sqrtf((double)dim));
+}
+
+__host__ __device__ unsigned int get3DIndex(int x, int y, int z, int dim) {
+	return x + dim*(y + dim*z);
+}
+
 __host__ __device__ unsigned int getThreadCount(unsigned int offset){
 	return min(((offset / 512) + 1)*baseThreadCount, 512);
 }
@@ -15,17 +42,23 @@ __host__ __device__ unsigned int getBlockCount(unsigned int offset, unsigned int
 /***************************************************************************/
 /*   											      Cuda Kernels   														 */
 /***************************************************************************/
-__global__ void setPuzzle(unsigned int *size, Puzzle *aPuzzle){
+__global__ void allocatePuzzle(unsigned int *size, Puzzle *aPuzzle){
   aPuzzle[0] = Puzzle(size[0]);
 }
 
-__global__ void numeralChanger(unsigned int *size, Puzzle *aPuzzle, unsigned int ***searchSpace){
+__global__ void setPuzzle(unsigned int *size, Puzzle *aPuzzle, unsigned int ***searchSpace){
   int tid = threadIdx.x + blockIdx.x * blockDim.x;
-  int row = tid % size[0];
-  int col = (tid / size[0]) % size[0];
+  int row;
+  int col;
+  int num;
+  int aValue;
 
-  for(int i = 0; i < size[0]; i++){
-    aPuzzle[0].allocatePuzzle(row, col, i, searchSpace[row][col][i]);
+  for(int i = tid; i < pow(size[0],3); i += blockDim.x*gridDim.x){
+    row = getRow(i, size[0]);
+    col = getCol(i, size[0]);
+    num = getNum(i, size[0]);
+    aValue = searchSpace[row][col][i];
+    aPuzzle[0].puzzleSet(row, col, num, aValue);
   }
 }
 
@@ -34,22 +67,19 @@ __global__ void exterminateRegions(unsigned int *size, unsigned int ***searchSpa
   sqrtSize = sqrt(sqrtSize);
 
   int tid = threadIdx.x + blockIdx.x * blockDim.x,
-    row = aClue % size[0],
-	  col = (aClue / size[0]) % size[0],
-	  num = aClue / (size[0]*size[0]),
-	  aClue_region_row = row / sqrtSize, // Region row 0,1, or 2
-	  aClue_region_col = col / sqrtSize;
+    row = aClue % size[0],//getRow(int, int)
+	  col = (aClue / size[0]) % size[0],//getCol(int, int)
+	  num = aClue / (size[0]*size[0]),//getNum(int, int)
+	  aClue_region_row = row / sqrtSize, //getSquare(int, int) // Region row 0,1, or 2
+	  aClue_region_col = col / sqrtSize; //getSquare(int, int)
 
   if(tid < size[0]){
-    //printf("clue: %d tid: %d row: %d col: %d num: %d\n", aClue, tid, row, col, num);
     searchSpace[tid][col][num] = 1;
     searchSpace[row][tid][num] = 1;
     searchSpace[row][col][tid] = 1;
     searchSpace[aClue_region_row * (int)sqrtSize + tid%(int)sqrtSize][aClue_region_col * (int)sqrtSize + tid/(int)sqrtSize][num] = 1;
   }
-
 }
-
 
 __global__ void exterminate(unsigned int *size, unsigned int *listOfClues, unsigned int ***searchSpace, unsigned int *numClues){
 	int tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -65,13 +95,12 @@ __global__ void exterminate(unsigned int *size, unsigned int *listOfClues, unsig
 }
 
 __global__ void printPuzzleFile(Puzzle *aPuzzle, unsigned int size){
-
   for (int row = 0; row < size; row++){
 		for (int col = 0; col < size; col++){
       if (col == size - 1){
-        printf("%u\t\n", aPuzzle[0].getCellNumeral(row, col));
+        printf("%u\t\n", aPuzzle[0].getCellProp(row, col));
       }else{
-        printf("%u, \t", aPuzzle[0].getCellNumeral(row, col));
+        printf("%u, \t", aPuzzle[0].getCellProp(row, col));
       }
 		}
 	}
@@ -83,11 +112,15 @@ __global__ void printPuzzleFile(Puzzle *aPuzzle, unsigned int size){
 
 __host__ Initializer::Initializer(unsigned int size){
   this->d_puzzle = allocateDevice<Puzzle>(1);
+  this->threads = getThreadCount(size*size);
+  this->blocks = getBlockCount(size*size, this->threads);
   this->size = size;
-  this->threads = getThreadCount(size * size);
-  this->blocks = getBlockCount(size * size, this->threads);
   cudaCheckError();
 }
+
+/***************************************************************************/
+/*   														Run           														 */
+/***************************************************************************/
 
 __host__ void Initializer::run(fstream &file){
   int row=0, col=0, num=0, clues=0;
@@ -113,56 +146,64 @@ __host__ void Initializer::run(fstream &file){
   cudaMemcpy(d_listClues, listOfClues, clues*sizeof(unsigned int), cudaMemcpyHostToDevice);
   cudaCheckError();
 
-  unsigned int ***h_searchSpace = allocateHost<unsigned int**>( this->size);
-  
+  unsigned int ***h_searchSpace = allocateHost<unsigned int**>(this->size); //MAKE 1D ARRAY
   for(int i = 0; i < this->size; i++){
-    h_searchSpace[i] = allocateHost<unsigned int*>( this->size);
+    h_searchSpace[i] = allocateHost<unsigned int*>(this->size);
   }
 
   for(int i = 0; i < this->size; i++){
     for(int j = 0; j < this->size; j++){
-      h_searchSpace[i][j] = allocateHost<unsigned int>( this->size);
-    }
-  }
-
-  for(int i = 0; i < this->size; i++){
-    for(int j = 0; j < this->size; j++){
-      for(int k = 0; k < this->size; k++){
-        h_searchSpace[i][j][k] = 0;
-      }
+      h_searchSpace[i][j] = allocateHost<unsigned int>(this->size);
     }
   }
 
   unsigned int ***d_searchSpace = allocateDevice<unsigned int**>(this->size);
   cudaMemcpy(d_searchSpace, h_searchSpace, this->size*sizeof(unsigned int**), cudaMemcpyHostToDevice);
   cudaCheckError();
-  
-  int threadCount = getThreadCount(clues);
-  int blockCount = getBlockCount(clues, threadCount);//launch clueNumber blocks and threads
 
-  exterminate<<<blockCount,threadCount>>>(d_size, d_listClues, d_searchSpace, d_numClues);
+  int threadsC = getThreadCount(clues);
+  int blocksC = getBlockCount(clues, threadsC);
+
+  exterminate<<<blocksC, threadsC>>>(d_size, d_listClues, d_searchSpace, d_numClues);
   cudaCheckError();
 
-  cudaMemcpy(h_searchSpace, d_searchSpace, this->size*sizeof(unsigned int**), cudaMemcpyDeviceToHost);
+  //this->threads = getThreadCount(pow(size,3));
+  //this->blocks = getBlockCount(pow(size,3), this->threads);
+
+  //addReduction<<<this->blocks, this->threads>>>(d_searchSpace, d_puzzle, d_size[0]);
+
+  /*cudaMemcpy(h_searchSpace, d_searchSpace, this->size*sizeof(unsigned int**), cudaMemcpyDeviceToHost);
   cudaCheckError();
   
-  /*
   int numSpecies = 0;
   for(int i = 0; i < this->size; i++){
     for(int j = 0; j < this->size; j++){
       for(int k = 0; k < this->size; k++ ){
+        h_searchSpace[i][j][k] = (h_searchSpace[i][j][k]+1)%2;
+
         if(h_searchSpace[i][j][k] == 1){numSpecies++;}
       }
     }
   }
-  numSpecies = ( this->size * this->size * this->size)-numSpecies;
-  */
-  
-  setPuzzle<<<1,1>>>(d_size, d_puzzle);
-  numeralChanger<<<this->blocks,this->threads>>>(d_size, d_puzzle, d_searchSpace);
+  //numSpecies = ( this->size * this->size * this->size)-numSpecies;
+  cout << numSpecies << endl;
+*/
+
+  allocatePuzzle<<<1,1>>>(d_size, d_puzzle);
+  cudaCheckError();
+  setPuzzle<<<this->blocks,this->threads>>>(d_size, d_puzzle, d_searchSpace);
   cudaCheckError();
 
+  //cudaFree(d_searchSpace);
+  //cudaCheckError();
+
+  //cudaFreeHost(h_searchSpace);
+  //cudaCheckError();
 }
+
+/***************************************************************************/
+/*   														Print          														 */
+/***************************************************************************/
 
 __host__ void Initializer::printPuzzle(){
   printf("\nSudoku Puzzle Printout\n");
@@ -176,20 +217,18 @@ __host__ void Initializer::printPuzzle(){
 
 
 
-__host__ __device__ unsigned int Initializer::get3DIndex(int x, int y, int z, int dim) {
-	return x + dim*(y + dim*z);
-}
+
 /***************************************************************************/
 /*														Getter Functions														 */
 /***************************************************************************/
 
+__host__ __device__ unsigned int Initializer::get3DIndex(int x, int y, int z, int dim) {
+	return x + dim*(y + dim*z);
+}
+
 __host__ __device__ unsigned int Initializer::getSize(){
 	return this->d_puzzle[0].getSize();
   }
-
-/***************************************************************************/
-/*														Setter Functions														 */
-/***************************************************************************/
 
 /***************************************************************************/
 /*														CUDA Helper Masks														 */
@@ -211,10 +250,55 @@ t *Initializer::allocateHost(unsigned int size){
 	return aValue;
 }
 
+/*template <unsigned int blockSize>
+__global__ void reduce6(int *g_idata, int *g_odata, unsigned int n) {
+  extern __shared__ int sdata[];
+  unsigned int tid = threadIdx.x;
+  unsigned int i = blockIdx.x*(blockSize*2) + tid;
+  unsigned int gridSize = blockSize*2*gridDim.x;
+  sdata[tid] = 0;
+  while (i < n) { sdata[tid] += g_idata[i] + g_idata[i+blockSize]; i += gridSize; }
+  __syncthreads();
+  if (blockSize >= 512) { if (tid < 256) { sdata[tid] += sdata[tid + 256]; } __syncthreads(); }
+  if (blockSize >= 256) { if (tid < 128) { sdata[tid] += sdata[tid + 128]; } __syncthreads(); }
+  if (blockSize >= 128) { if (tid < 64) { sdata[tid] += sdata[tid + 64]; } __syncthreads(); }
+  if (tid < 32) warpReduce(sdata, tid);
+  if (tid == 0) g_odata[blockIdx.x] = sdata[0];
+  tid = threadIdx.x + blockIdx.x * blockDim.x;
+  i = gridDim.x/2;
+  while (tid < i) {
+    //g_odata[tid] += g_odata[tid] + g_odata[tid+i]; 
+    printf("tid: %d tid+i: %d i: %d",tid, tid+i, i); 
+    i/=2;
+  }
 
+}
 
-/*template <unsigned int blockSize, int function>
-__global__ void getConflictData(Puzzle dPuzzle, int numSpecies){
+template <unsigned int blockSize>
+__device__ void warpReduce(volatile unsigned int *sdata, unsigned int tid){
+	if(blockSize >= 64){
+    sdata[tid] += sdata[tid + 32];
+	}
+	if (blockSize >= 32){
+    sdata[tid] += sdata[tid + 16];
+	}
+	if (blockSize >= 16){
+    sdata[tid] += sdata[tid + 8];
+	}
+	if(blockSize >= 8){
+    sdata[tid] += sdata[tid + 4];
+	}
+	if (blockSize >= 4){
+    sdata[tid] += sdata[tid + 2];
+	}
+	if (blockSize >= 2){
+    sdata[tid] += sdata[tid + 1];
+	}
+}
+
+/*
+template <unsigned int blockSize, int function>
+__global__ void addReduction(Puzzle dPuzzle, unsigned int ***searchSpace, unsigned int size){
 	extern __shared__ unsigned int sdata[];
 	unsigned int tid = threadIdx.x;
 	unsigned int i = blockIdx.x*(blockSize*2) + tid;
@@ -236,10 +320,6 @@ __global__ void getConflictData(Puzzle dPuzzle, int numSpecies){
 	blockReduce<blockSize, function, 128, 64>(sdata, tid);
 	if (tid < 32){
 		warpReduce<blockSize, function>(sdata, tid);
-	}
-	if(tid == 0){
-				atomicAdd(&params->totalConflicts, sdata[0]);
-				params->avgConflicts = params->totalConflicts / numSpecies + 1;
 	}
 }
 

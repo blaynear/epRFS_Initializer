@@ -7,12 +7,9 @@ using namespace std;
 class Puzzle{
 
   unsigned int dim; //Size N of Sudoku puzzle
-  unsigned int threads;
-  unsigned int blocks;
-  unsigned int generation;
-  unsigned int conflict;
+  unsigned int numSpecies;
   double elapsedTime;
-  Cell **grid; //The N x N cell Sudoku cell grid 2d array.
+  Cell **grid; //The N x N cell Sudoku cell grid 2d array. MAKE 1D ARRAY
 
   template<class t>
   __host__ __device__ t *allocateHost(unsigned int);
@@ -26,14 +23,13 @@ class Puzzle{
   __host__ __device__ unsigned int get3DIndex(int, int, int, int);
 public:
   __host__ __device__ unsigned int getSize();
-  __host__ __device__ unsigned int getSizeSqrt();
   __host__ __device__ unsigned int getCellSize(unsigned int, unsigned int);
-  __host__ __device__ unsigned int getCellNumeral(unsigned int , unsigned int);
+  __host__ __device__ unsigned int getCellProp(unsigned int , unsigned int);
   __host__ __device__ unsigned int getThreadCount();
   __host__ __device__ unsigned int getBlockCount();
   __host__ __device__ void free_puzzle();
   __host__ __device__ Puzzle(unsigned int); //Create generator which specifies a unique puzzle of size N
-  __device__ void allocatePuzzle(int, int, unsigned int, unsigned int);
+  __device__ void puzzleSet(int, int, unsigned int, unsigned int);
 };
 
 #endif

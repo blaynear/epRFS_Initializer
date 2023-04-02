@@ -7,7 +7,6 @@ using namespace std;
 
 class Initializer{
 
-  //Puzzle *h_puzzle; //For testing
   Puzzle *d_puzzle; //aPuzzle allocated
   Puzzle *h_puzzle; //aPuzzle allocated
 

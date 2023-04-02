@@ -72,7 +72,6 @@ int main(int argc, char** argv){
   
     fstream puzFile;  
     puzFile.open (argv[1]);
-  
     if(!puzFile){cerr << "Error opening file" << endl;}
 
     int size=0;
@@ -82,8 +81,12 @@ int main(int argc, char** argv){
 	cudaMallocHost((void**)&aInitializer, sizeof(Initializer));
 	aInitializer[0] = Initializer(size);
   aInitializer[0].run(puzFile);
-  //aInitializer[0].printPuzzle();
-	
+  aInitializer[0].printPuzzle();
+  
   puzFile.close();
   return 0;
 }
+//Hardik start refactoring EPRFS with puzzle class values.
+//create project with puzzle class
+//work on linking database and program to accept file name to pull info from database done in main
+//us that data to construct puzzle class
