@@ -15,16 +15,18 @@ class Initializer{
   unsigned int threads; //Number of threads per block
   
   template<class t>
-  t *allocateDevice(unsigned int size);
+  t *allocateDevice(unsigned int);
   template<class t>
-  t *allocateHost(unsigned int size);
+  t *allocateHost(unsigned int);
 
 public:
-  __host__ Initializer(unsigned int size);
-  __host__ void run(fstream &file);
+  __host__ Initializer(unsigned int);
+  __host__ void run(fstream &);
   __host__ void printPuzzle();
-  __host__ __device__ unsigned int get3DIndex(int x, int y, int z, int dim);
+  __host__ __device__ unsigned int get3DIndex(int, int, int, int);
   __host__ __device__ unsigned int getSize();
+  __host__ __device__ Puzzle * getPuzzle();
+
   
 };
 

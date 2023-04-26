@@ -3,6 +3,7 @@
 #include <iostream>
 #include "math.h"
 #include <cuda_runtime.h>
+#include <ctime>
 #include "device_launch_parameters.h"
 //#include "device_atomic_functions.h"
 #include "cuda.h"
@@ -25,11 +26,7 @@ using namespace std;
 class Cell{
   unsigned int size;
   unsigned int *numerals; //need to track and update numeral list/size.
-
-  //unsigned int *numeralProp; //Proportion array for species
-  //unsigned int *numeralFit;
   unsigned int prop;
-  //unsigned int fitness;
 
   template<class t>
   __host__ __device__ t *allocateHost(unsigned int);
@@ -39,12 +36,10 @@ public:
   __host__ __device__ Cell(unsigned int);
   __host__ __device__ unsigned int getSize();
   __host__ __device__ void setNumeral(unsigned int, unsigned int);
+  __host__ __device__ unsigned int * getNumeral();
+  __host__ __device__ void setProp(unsigned int, unsigned int);
   __host__ __device__ unsigned int getProp();
-  //__host__ __device__ unsigned int getNumeralProp();
   __host__ __device__ void free_cell();
-  //__host__ __device__ unsigned int getNumeralFit();
-  //__host__ __device__ unsigned int getProp();
-  //__host__ __device__ unsigned int getFitness();
 };
 
 #endif

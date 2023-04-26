@@ -1,10 +1,12 @@
 #include <iostream>
 #include <fstream>
+#include <sqlite3.h>
 #include "../Initializer/Initializer.cuh"
+#include "../ePRFS/ePRFS.cuh"
+
 using namespace std;
 
-int checkDeviceProp(cudaDeviceProp p)
-{
+int checkDeviceProp(cudaDeviceProp p){
 	int support = p.concurrentKernels;
 	if (support == 0)
 		printf("%s does not support concurrent kernels\n",
@@ -18,9 +20,7 @@ int checkDeviceProp(cudaDeviceProp p)
 	return support;
 }
 
-// Print device properties
-void printDevProp(cudaDeviceProp devProp)
-{
+void printDevProp(cudaDeviceProp devProp){
   printf("Major revision number:         %d\n",  devProp.major);
   printf("Minor revision number:         %d\n",  devProp.minor);
   printf("Name:                          %s\n",  devProp.name);
@@ -69,24 +69,34 @@ int main(int argc, char** argv){
     if(argc != 2) { 
       std::cerr << "Usage: " << argv[0] << " a puzzle text" << std::endl; 
     }
-  
+    
+    sqlite3 *db;
     fstream puzFile;  
     puzFile.open (argv[1]);
     if(!puzFile){cerr << "Error opening file" << endl;}
 
     int size=0;
     puzFile >> size;
+    int rc = sqlite3_open("SeniorDesignDB", &db);
+
+    if (rc != SQLITE_OK) {
+      cerr << "Error" << endl;
+      sqlite3_close(db);
+      return 1;
+  }
 
 	Initializer *aInitializer;
 	cudaMallocHost((void**)&aInitializer, sizeof(Initializer));
 	aInitializer[0] = Initializer(size);
   aInitializer[0].run(puzFile);
   aInitializer[0].printPuzzle();
-  
+
+  ePRFS *loop;
+  cudaMallocHost((void**)&loop, sizeof(ePRFS));
+  cudaCheckError();
+  loop[0] = ePRFS(aInitializer[0].getPuzzle(), argv[1]);
+
+  sqlite3_close(db);
   puzFile.close();
   return 0;
 }
-//Hardik start refactoring EPRFS with puzzle class values.
-//create project with puzzle class
-//work on linking database and program to accept file name to pull info from database done in main
-//us that data to construct puzzle class

@@ -21,14 +21,18 @@ class Puzzle{
   __host__ __device__ unsigned int getSquare(int, int);
   __host__ __device__ unsigned int get2DIndex(int, int, int);
   __host__ __device__ unsigned int get3DIndex(int, int, int, int);
+  //__host__ __device__ void printPopulation(int h_dim, Solution* aSolution); //impliment for printing
+
 public:
   __host__ __device__ unsigned int getSize();
   __host__ __device__ unsigned int getCellSize(unsigned int, unsigned int);
   __host__ __device__ unsigned int getCellProp(unsigned int , unsigned int);
-  __host__ __device__ unsigned int getThreadCount();
-  __host__ __device__ unsigned int getBlockCount();
+  __host__ __device__ unsigned int *getCellNumeral(unsigned int , unsigned int);
+  __host__ __device__ void setCellProp(unsigned int , unsigned int);
+  __host__ __device__ void setNumSpecies(int);
+  __host__ __device__ unsigned int getNumSpecies();
   __host__ __device__ void free_puzzle();
-  __host__ __device__ Puzzle(unsigned int); //Create generator which specifies a unique puzzle of size N
+  __host__ __device__ Puzzle(unsigned int, unsigned int); //Create generator which specifies a unique puzzle of size N
   __device__ void puzzleSet(int, int, unsigned int, unsigned int);
 };
 

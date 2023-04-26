@@ -2,13 +2,23 @@
 
 __host__ __device__ Cell::Cell(unsigned int size){
   this->size = size;
+  this->prop = 0;
   this->numerals = allocateDevice<unsigned int>(size); //Species number
-  //this->numeralProp = allocateDevice<unsigned int>(size); //Proportion array for species
-  //this->numeralFit = allocateDevice<unsigned int>(size);
 }
 
 __host__ __device__ void Cell::setNumeral(unsigned int index, unsigned int set){
 	this->numerals[index] = set;
+}
+
+__host__ __device__ unsigned int * Cell::getNumeral(){
+	return this->numerals;
+}
+
+__host__ __device__ void Cell::setProp(unsigned int index, unsigned int set){
+	if(set == 0){printf(" ");}
+	if(set == 0){
+		this->prop +=(set+1)%2;
+	}
 }
 
 __host__ __device__ unsigned int Cell::getProp(){
@@ -40,6 +50,4 @@ __host__ __device__ t *Cell::allocateDevice(unsigned int size){
 
 __host__ __device__ void Cell::free_cell(){
 	cudaFree(numerals);
-	//cudaFree(numeralProp);
-	//cudaFree(numeralFit);
 }
